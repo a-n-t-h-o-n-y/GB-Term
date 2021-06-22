@@ -4,16 +4,17 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
 #include <termox/termox.hpp>
 
-#include <cli.h>
 #include <gameboy.h>
 #include <input.h>
 #include <options.h>
 #include <util/files.h>
+#include <cli.hpp>
 
 namespace {
 
@@ -50,7 +51,7 @@ class Gameboy_widget
 
    public:
     Gameboy_widget(std::vector<u8> rom_data,
-                   Options& options,
+                   gbemu::Options& options,
                    std::vector<u8> save_data)
         : emulator_{std::move(rom_data), options, std::move(save_data)}
     {
@@ -63,8 +64,16 @@ class Gameboy_widget
                     area.width < display_width || area.height < display_height;
             });
 
-        emulator_.register_draw_callback(
-            [this](FrameBuffer const& buf) { next_buffer_ = buf; });
+        emulator_.register_draw_callback([this, previous_time = Clock_t::now()](
+                                             FrameBuffer const& buf) mutable {
+            constexpr auto zero   = std::chrono::nanoseconds{0};
+            constexpr auto period = std::chrono::microseconds{16'667};  // 60fps
+            auto const to_wait    = period - (Clock_t::now() - previous_time);
+            if (to_wait > zero)
+                std::this_thread::sleep_for(to_wait);
+            previous_time = Clock_t::now();
+            next_buffer_  = buf;
+        });
 
         loop_.run_async([this](auto& queue) {
             auto const now = Clock_t::now();
@@ -180,7 +189,7 @@ class Gameboy_widget
 
 int main(int argc, char* argv[])
 {
-    auto cli_options = get_cli_options(argc, argv);
+    auto cli_options = gbemu::get_cli_options(argc, argv);
     auto rom_data    = read_bytes(cli_options.filename);
     auto save_data   = load_state(cli_options.filename);
 
