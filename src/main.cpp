@@ -51,7 +51,7 @@ class Gameboy_widget
 
    public:
     Gameboy_widget(std::vector<u8> rom_data,
-                   gbemu::Options& options,
+                   Options& options,
                    std::vector<u8> save_data)
         : emulator_{std::move(rom_data), options, std::move(save_data)}
     {
@@ -76,30 +76,6 @@ class Gameboy_widget
         });
 
         loop_.run_async([this](auto& queue) {
-            auto const now = Clock_t::now();
-            {
-                auto const guard = std::lock_guard{button_mtx_};
-                if (button_.has_value()) {
-                    emulator_.button_pressed(*button_);
-                    live_keypresses_[*button_] = now;
-                    button_                    = std::nullopt;
-                }
-            }
-
-            // Simulate key release after 100 ms without being pressed.
-            // Terminal cannot provide key release events.
-            // Because of how the terminal works, it isn't possible to have two
-            // keys pressed at the same time.
-            for (auto iter = std::begin(live_keypresses_);
-                 iter != std::end(live_keypresses_);) {
-                auto const& [btn, time] = *iter;
-                if ((now - time) >= std::chrono::milliseconds{100}) {
-                    emulator_.button_released(btn);
-                    iter = live_keypresses_.erase(iter);
-                }
-                else
-                    ++iter;
-            }
             emulator_.tick();  // This can assign to next_buffer_.
             if (next_buffer_.has_value()) {
                 queue.append(
@@ -126,24 +102,18 @@ class Gameboy_widget
 
     auto key_press_event(ox::Key k) -> bool override
     {
-        auto b = std::optional<::GbButton>{std::nullopt};
-        switch (k) {
-            using ox::Key;
-            case Key::Arrow_up: b = ::GbButton::Up; break;
-            case Key::Arrow_down: b = ::GbButton::Down; break;
-            case Key::Arrow_left: b = ::GbButton::Left; break;
-            case Key::Arrow_right: b = ::GbButton::Right; break;
-            case Key::z: b = ::GbButton::A; break;
-            case Key::x: b = ::GbButton::B; break;
-            case Key::Enter: b = ::GbButton::Start; break;
-            case Key::Backspace: b = ::GbButton::Select; break;
-            default: break;
-        }
-        {
-            auto const guard = std::lock_guard{button_mtx_};
-            button_          = b;
-        }
+        auto const button = key_to_button(k);
+        if (button.has_value())
+            emulator_.button_pressed(*button);
         return Base_t::key_press_event(k);
+    }
+
+    auto key_release_event(ox::Key k) -> bool override
+    {
+        auto const button = key_to_button(k);
+        if (button.has_value())
+            emulator_.button_released(*button);
+        return Base_t::key_release_event(k);
     }
 
    private:
@@ -151,14 +121,29 @@ class Gameboy_widget
     Gameboy emulator_;
     ox::Event_loop loop_;
     std::optional<::FrameBuffer> next_buffer_ = std::nullopt;
-    std::optional<::GbButton> button_         = std::nullopt;
-    std::mutex button_mtx_;
-    std::map<::GbButton, Clock_t::time_point> live_keypresses_;
 
    private:
     void handle_next_frame(FrameBuffer buf)
     {
         this->Base_t::reset(translate_to_pairs(buf));
+    }
+
+    /// Translate ox::Key to gameboy button, if there is a representation.
+    [[nodiscard]] static auto key_to_button(ox::Key k)
+        -> std::optional<::GbButton>
+    {
+        using ox::Key;
+        switch (k) {
+            case Key::Arrow_up: return ::GbButton::Up;
+            case Key::Arrow_down: return ::GbButton::Down;
+            case Key::Arrow_left: return ::GbButton::Left;
+            case Key::Arrow_right: return ::GbButton::Right;
+            case Key::z: return ::GbButton::A;
+            case Key::x: return ::GbButton::B;
+            case Key::Enter: return ::GbButton::Start;
+            case Key::Backspace: return ::GbButton::Select;
+            default: return std::nullopt;
+        }
     }
 
     [[nodiscard]] static auto translate_to_pairs(FrameBuffer const& buf)
@@ -189,10 +174,11 @@ class Gameboy_widget
 
 int main(int argc, char* argv[])
 {
-    auto cli_options = gbemu::get_cli_options(argc, argv);
+    auto cli_options = get_cli_options(argc, argv);
     auto rom_data    = read_bytes(cli_options.filename);
     auto save_data   = load_state(cli_options.filename);
 
-    return ox::System{}.run<ox::Float_2d<oxgb::Gameboy_widget>>(
-        std::move(rom_data), cli_options.options, std::move(save_data));
+    return ox::System{ox::Mouse_mode::Basic, ox::Key_mode::Raw}
+        .run<ox::Float_2d<oxgb::Gameboy_widget>>(
+            std::move(rom_data), cli_options.options, std::move(save_data));
 }
