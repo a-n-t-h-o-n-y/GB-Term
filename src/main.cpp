@@ -50,10 +50,7 @@ class Gameboy_widget
     using Clock_t = std::chrono::high_resolution_clock;
 
    public:
-    Gameboy_widget(std::vector<u8> rom_data,
-                   Options& options,
-                   std::vector<u8> save_data)
-        : emulator_{std::move(rom_data), options, std::move(save_data)}
+    Gameboy_widget(Cartridge& cart, Options& options) : emulator_{cart, options}
     {
         using namespace ox::pipe;
 
@@ -66,7 +63,7 @@ class Gameboy_widget
 
         emulator_.register_draw_callback([this, previous_time = Clock_t::now()](
                                              FrameBuffer const& buf) mutable {
-            constexpr auto zero   = std::chrono::nanoseconds{0};
+            constexpr auto zero   = Clock_t::duration{0};
             constexpr auto period = std::chrono::microseconds{16'667};  // 60fps
             auto const to_wait    = period - (Clock_t::now() - previous_time);
             if (to_wait > zero)
@@ -175,10 +172,10 @@ class Gameboy_widget
 int main(int argc, char* argv[])
 {
     auto cli_options = get_cli_options(argc, argv);
-    auto rom_data    = read_bytes(cli_options.filename);
-    auto save_data   = load_state(cli_options.filename);
+    auto cartridge   = get_cartridge(read_bytes(cli_options.filename),
+                                   load_state(cli_options.filename));
 
     return ox::System{ox::Mouse_mode::Basic, ox::Key_mode::Raw}
-        .run<ox::Float_2d<oxgb::Gameboy_widget>>(
-            std::move(rom_data), cli_options.options, std::move(save_data));
+        .run<ox::Float_2d<oxgb::Gameboy_widget>>(*cartridge,
+                                                 cli_options.options);
 }
