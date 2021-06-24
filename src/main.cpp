@@ -119,10 +119,13 @@ class Gameboy_widget
     ox::Event_loop loop_;
     std::optional<::FrameBuffer> next_buffer_ = std::nullopt;
 
+    std::vector<std::pair<Base_t::Coordinate, ox::Color>> optimization_buf_;
+
    private:
     void handle_next_frame(FrameBuffer buf)
     {
-        this->Base_t::reset(translate_to_pairs(buf));
+        auto const& coords = translate_to_pairs(buf);
+        this->Base_t::reset(std::cbegin(coords), std::cend(coords));
     }
 
     /// Translate ox::Key to gameboy button, if there is a representation.
@@ -143,17 +146,17 @@ class Gameboy_widget
         }
     }
 
-    [[nodiscard]] static auto translate_to_pairs(FrameBuffer const& buf)
-        -> std::vector<std::pair<Base_t::Coordinate, ox::Color>>
+    [[nodiscard]] auto translate_to_pairs(FrameBuffer const& buf)
+        -> std::vector<std::pair<Base_t::Coordinate, ox::Color>>&
     {
-        auto result = std::vector<std::pair<Base_t::Coordinate, ox::Color>>{};
+        optimization_buf_.clear();
         for (auto x = 0; x < gb_width; ++x) {
             for (auto y = 0; y < gb_height; ++y) {
-                result.push_back({{x, Base_t::boundary().north - y},
-                                  to_color(buf.get_pixel(x, y))});
+                optimization_buf_.push_back({{x, Base_t::boundary().north - y},
+                                             to_color(buf.get_pixel(x, y))});
             }
         }
-        return result;
+        return optimization_buf_;
     }
 
     [[nodiscard]] static auto to_color(::Color c) -> ox::Color
