@@ -10,11 +10,11 @@
 
 #include <termox/termox.hpp>
 
-#include <gameboy.h>
-#include <input.h>
-#include <options.h>
-#include <util/files.h>
 #include <cli.hpp>
+#include <gameboy.hpp>
+#include <input.hpp>
+#include <options.hpp>
+#include <util/files.hpp>
 
 namespace {
 
@@ -73,14 +73,14 @@ class Gameboy_widget
         });
 
         loop_.run_async([this](auto& queue) {
-            emulator_.tick();  // This can assign to next_buffer_.
-            if (next_buffer_.has_value()) {
-                queue.append(
-                    ox::Custom_event{[this, buf = std::move(*next_buffer_)] {
-                        this->handle_next_frame(std::move(buf));
-                    }});
-                next_buffer_ = std::nullopt;
-            }
+            while (!next_buffer_.has_value())
+                emulator_.tick();  // This can assign to next_buffer_.
+
+            queue.append(
+                ox::Custom_event{[this, buf = std::move(*next_buffer_)] {
+                    this->handle_next_frame(std::move(buf));
+                }});
+            next_buffer_ = std::nullopt;
         });
     }
 
