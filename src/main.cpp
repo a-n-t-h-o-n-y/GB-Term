@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <map>
@@ -21,7 +22,24 @@ namespace {
 constexpr auto gb_width  = 160;
 constexpr auto gb_height = 144;
 
-auto load_state(std::string const& save_name) -> std::vector<u8>
+[[nodiscard]] auto make_save_filename(std::string const& name) -> std::string
+{
+    return name + ".sav";
+}
+
+/// Save game state as a file.
+void save_state(Gameboy const& emulator, std::string const& name)
+{
+    auto const cartridge_ram = emulator.get_cartridge_ram();
+    if (cartridge_ram.size() == 0)
+        return;
+
+    auto output_file = std::ofstream{make_save_filename(name)};
+    std::copy(cartridge_ram.cbegin(), cartridge_ram.cend(),
+              std::ostreambuf_iterator<char>(output_file));
+}
+
+[[nodiscard]] auto load_state(std::string const& save_name) -> std::vector<u8>
 {
     auto const filename = save_name + ".sav";
     auto const ifs      = std::ifstream{filename};
@@ -31,6 +49,33 @@ auto load_state(std::string const& save_name) -> std::vector<u8>
     }
     else
         return {};
+}
+
+/// Translate ox::Key to gameboy button, if there is a representation.
+[[nodiscard]] auto key_to_button(ox::Key k) -> std::optional<::GbButton>
+{
+    using ox::Key;
+    switch (k) {
+        case Key::Arrow_up: return ::GbButton::Up;
+        case Key::Arrow_down: return ::GbButton::Down;
+        case Key::Arrow_left: return ::GbButton::Left;
+        case Key::Arrow_right: return ::GbButton::Right;
+        case Key::z: return ::GbButton::A;
+        case Key::x: return ::GbButton::B;
+        case Key::Enter: return ::GbButton::Start;
+        case Key::Backspace: return ::GbButton::Select;
+        default: return std::nullopt;
+    }
+}
+
+[[nodiscard]] auto to_color(::Color c) -> ox::Color
+{
+    switch (c) {
+        case ::Color::White: return ox::gameboy::Green_4;
+        case ::Color::LightGray: return ox::gameboy::Green_3;
+        case ::Color::DarkGray: return ox::gameboy::Green_2;
+        case ::Color::Black: return ox::gameboy::Green_1;
+    }
 }
 
 }  // namespace
@@ -50,7 +95,8 @@ class Gameboy_widget
     using Clock_t = std::chrono::high_resolution_clock;
 
    public:
-    Gameboy_widget(Cartridge& cart, Options& options) : emulator_{cart, options}
+    Gameboy_widget(Cartridge& cart, CliOptions& options)
+        : emulator_{cart, options.options}, filename_{options.filename}
     {
         using namespace ox::pipe;
 
@@ -60,9 +106,10 @@ class Gameboy_widget
 
         emulator_.register_draw_callback([this, previous_time = Clock_t::now()](
                                              FrameBuffer const& buf) mutable {
-            constexpr auto zero   = Clock_t::duration{0};
-            constexpr auto period = std::chrono::microseconds{16'667};  // 60fps
-            auto const to_wait    = period - (Clock_t::now() - previous_time);
+            constexpr auto zero  = Clock_t::duration{0};
+            constexpr auto fps60 = std::chrono::microseconds{16'667};
+            auto const period    = fps60 / framerate_divider_;
+            auto const to_wait   = period - (Clock_t::now() - previous_time);
             if (to_wait > zero)
                 std::this_thread::sleep_for(to_wait);
             previous_time = Clock_t::now();
@@ -84,7 +131,13 @@ class Gameboy_widget
    protected:
     auto key_press_event(ox::Key k) -> bool override
     {
-        if (auto const button = key_to_button(k); button.has_value())
+        if (k == ox::Key::Period)
+            this->increase_framerate();
+        else if (k == ox::Key::Comma)
+            this->decrease_framerate();
+        else if (k == ox::Key::s)
+            save_state(emulator_, filename_);
+        else if (auto const button = key_to_button(k); button.has_value())
             emulator_.button_pressed(*button);
         return Base_t::key_press_event(k);
     }
@@ -98,8 +151,10 @@ class Gameboy_widget
 
    private:
     Gameboy emulator_;
+    std::string filename_;
     ox::Event_loop loop_;
     std::optional<::FrameBuffer> next_buffer_ = std::nullopt;
+    double framerate_divider_                 = 1.;
 
     std::vector<std::pair<Base_t::Coordinate, ox::Color>> optimization_buf_;
 
@@ -108,24 +163,6 @@ class Gameboy_widget
     {
         auto const& coords = translate_to_pairs(buf);
         this->Base_t::reset(std::cbegin(coords), std::cend(coords));
-    }
-
-    /// Translate ox::Key to gameboy button, if there is a representation.
-    [[nodiscard]] static auto key_to_button(ox::Key k)
-        -> std::optional<::GbButton>
-    {
-        using ox::Key;
-        switch (k) {
-            case Key::Arrow_up: return ::GbButton::Up;
-            case Key::Arrow_down: return ::GbButton::Down;
-            case Key::Arrow_left: return ::GbButton::Left;
-            case Key::Arrow_right: return ::GbButton::Right;
-            case Key::z: return ::GbButton::A;
-            case Key::x: return ::GbButton::B;
-            case Key::Enter: return ::GbButton::Start;
-            case Key::Backspace: return ::GbButton::Select;
-            default: return std::nullopt;
-        }
     }
 
     [[nodiscard]] auto translate_to_pairs(FrameBuffer const& buf)
@@ -141,19 +178,23 @@ class Gameboy_widget
         return optimization_buf_;
     }
 
-    [[nodiscard]] static auto to_color(::Color c) -> ox::Color
+    void increase_framerate()
     {
-        switch (c) {
-            case ::Color::White: return ox::gameboy::Green_4;
-            case ::Color::LightGray: return ox::gameboy::Green_3;
-            case ::Color::DarkGray: return ox::gameboy::Green_2;
-            case ::Color::Black: return ox::gameboy::Green_1;
-        }
+        if (framerate_divider_ >= 3.)
+            return;
+        framerate_divider_ += 0.5;
+    }
+
+    void decrease_framerate()
+    {
+        if (framerate_divider_ <= 1.)
+            return;
+        framerate_divider_ -= 0.5;
     }
 };
 
 struct App : ox::Float_2d<Gameboy_widget> {
-    App(Cartridge& cart, Options& options)
+    App(Cartridge& cart, CliOptions& options)
         : ox::Float_2d<Gameboy_widget>{cart, options}
     {
         using namespace ox::pipe;
@@ -170,5 +211,5 @@ int main(int argc, char* argv[])
                                    load_state(cli_options.filename));
 
     return ox::System{ox::Mouse_mode::Basic, ox::Key_mode::Raw}
-        .run<gbterm::App>(*cartridge, cli_options.options);
+        .run<gbterm::App>(*cartridge, cli_options);
 }

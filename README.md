@@ -36,8 +36,16 @@ Sound is not implemented.
 
 ## Controls
 
-- Arrows keys
-- A Button: z
-- B Button: x
-- Start:    Enter
-- Select:   Backspace
+### Gameboy
+
+- D-Pad:    __Arrows keys__
+- A Button: __z__
+- B Button: __x__
+- Start:    __Enter__
+- Select:   __Backspace__
+
+### Emulator
+
+- __comma__:    Slows emulator speed, bottoms out at normal speed
+- __period__:   Speed up emulator, bottoms out at 3x normal speed
+- __s-key__:   Save the game cartridge state(must save with game mechanics first)
