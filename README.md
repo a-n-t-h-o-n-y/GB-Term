@@ -4,7 +4,7 @@ Terminal frontend for the [GBEmu](https://github.com/jgilchrist/gbemu) Gameboy
 Emulator.
 
 <p align="center">
-  <img src="docs/images/zelda.png">
+  <img src="docs/zelda.png">
 </p>
 
 ## Build
