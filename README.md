@@ -1,7 +1,7 @@
-# GB Term
+# GB Term |+ ;|
 
 Terminal frontend for the [GBEmu](https://github.com/jgilchrist/gbemu) Gameboy
-Emulator.
+Emulator, built with [TermOx](https://github.com/a-n-t-h-o-n-y/TermOx).
 
 <p align="center">
   <img src="docs/zelda.png">
@@ -12,7 +12,7 @@ Emulator.
 Relies on cmake to generate build files for the `gb-term` target. git submodules
 are used; run `git submodule update --init` after cloning.
 
-## Running
+## Run
 
 The emulator can run a game by specifying the ROM file as the first argument
 when launching from the terminal.
@@ -31,6 +31,8 @@ The Gameboy has a resolution of 160x144, if your terminal is not expanded to at
 least this size, the display will be scalled to a lower resolution. It is
 recommended to make the font size much smaller in order to get the full
 resolution(ctrl + (plus/minus) changes font size on most terminals).
+
+Sound is not implemented.
 
 ## Controls
 
