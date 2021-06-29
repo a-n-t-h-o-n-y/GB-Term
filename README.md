@@ -10,7 +10,7 @@ Emulator, built with [TermOx](https://github.com/a-n-t-h-o-n-y/TermOx).
 ## Build
 
 Relies on cmake to generate build files for the `gb-term` target. git submodules
-are used; run `git submodule update --init` after cloning.
+are used; run `git submodule update --init --recursive` after cloning.
 
 ## Run
 
