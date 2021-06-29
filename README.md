@@ -28,7 +28,7 @@ From the build directory:
 The release build should run fine at 60fps; debug will be slightly slower 🐌
 
 The Gameboy has a resolution of 160x144, if your terminal is not expanded to at
-least this size, the display will be scalled to a lower resolution. It is
+least this size, the display will be scaled to a lower resolution. It is
 recommended to make the font size much smaller in order to get the full
 resolution(ctrl + (plus/minus) changes font size on most terminals).
 
